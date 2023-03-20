@@ -4,7 +4,7 @@ version = "0.1.0"
 description = ""
 authors = ["Piotr Baryczkowski"]
 readme = "README.md"
-packages = [{include = "af_termination"}]
+packages = [{include = "af-termination"}]
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.12"
