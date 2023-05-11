@@ -48,10 +48,10 @@ def parse_arguments(argv: List[str]) -> argparse.Namespace:
 
 def _list_all_data(dir: str) -> List[str]:
     """List all samples within a dataset
-    
+
     Args:
         dir (str): directory containing raw data from physionet
-    
+
     eturns:
         List[str]: list of datasets (training, test-a, test-b)
     """
@@ -60,17 +60,15 @@ def _list_all_data(dir: str) -> List[str]:
 
 def _list_records(dir: str) -> List[str]:
     """List all record names for a given person
-    
+
     Args:
         dir (str): directory containing records
-    
+
     Returns:
         List[str]: record names
     """
     all_record_files = os.listdir(dir)
-    record_names = list(
-        set([file.split(".")[0] for file in all_record_files])
-    )
+    record_names = list(set([file.split(".")[0] for file in all_record_files]))
     return record_names
 
 
@@ -78,11 +76,11 @@ def _read_record_and_annotation(
     data_dir: str, record_name: str
 ) -> Tuple[wfdb.Record, wfdb.Annotation]:
     """Read record's data and annotation of a given record
-    
+
     Args:
         data_dir (str): directory containing records
         record_name (str): record name
-    
+
     Returns:
         Tuple[wfdb.Record, wfdb.Annotation]: tuple of record's data and annotation
     """
@@ -97,34 +95,33 @@ def _read_record_and_annotation(
 
 
 def _prepare_record_data(
-    record: wfdb.Record, annotation: wfdb.Annotation, label: str, sample_length = 64
+    record: wfdb.Record,
+    annotation: wfdb.Annotation,
+    label: str,
+    sample_length: int = 128,
+    sample_freq: int = 12,
 ) -> Tuple[ArrayLike, ArrayLike]:
-    """
-    """
+    """ """
     ann_points = annotation.sample
 
     record_length = record.p_signal.shape[0]
     num_ecgs = record.p_signal.shape[1]
-    
+
     data_size = math.ceil(record_length / sample_length)
 
     ecg_data = np.zeros((data_size, sample_length, num_ecgs), dtype=np.float32)
-    labels = np.zeros((data_size, 2), dtype=np.int8)
+    labels = np.zeros((data_size, num_ecgs), dtype=np.int8)
 
-    dummy_encoder = {
-        'n': np.array([0, 0], dtype=np.int8),
-        's': np.array([0, 1], dtype=np.int8),
-        't': np.array([1, 1], dtype=np.int8),
-        'a': np.array([1, 0], dtype=np.int8),
-        'b': np.array([1, 0], dtype=np.int8)
-    }
+    dummy_encoder = {"n": 0, "s": 1, "t": 2, "a": 3, "b": 4}
 
     for i in range(data_size):
-        idx = i*sample_length
+        idx = i * sample_length
 
-        ecg_data[i] = record.p_signal[idx:idx+sample_length]
-        labels[i] = list(map(lambda x: dummy_encoder[x], label))[0]
-        
+        ecg_data[i] = record.p_signal[idx : idx + sample_length]
+        labels[i] = np.full((num_ecgs), dummy_encoder[label])
+
+    ecg_data = ecg_data.swapaxes(1, 2)
+
     return (ecg_data, labels)
 
 
@@ -136,6 +133,8 @@ def main() -> None:
     sample_length = args.sample_length
     sample_freq = args.sample_freq
     download = args.download
+
+    num_ecgs = 2
 
     # standardize the datasource path
     if ds_dir[-1] != "/":
@@ -150,10 +149,7 @@ def main() -> None:
         wfdb.dl_database("aftdb", ds_dir)
 
     dataset_names = _list_all_data(ds_dir)
-    dataset_paths = [
-        os.path.join(ds_dir, dataset_dir)
-        for dataset_dir in dataset_names
-    ]
+    dataset_paths = [os.path.join(ds_dir, dataset_dir) for dataset_dir in dataset_names]
 
     all_records = [
         (dataset_dir, sorted(_list_records(dataset_dir)))
@@ -170,8 +166,23 @@ def main() -> None:
         (dataset_path, _prepare_record_data(rec, ann, label))
         for dataset_path, (rec, ann, label) in records_and_annotations
     ]
-    
-    print((prepared_data[0]))
+
+    # Transform data
+    learing = [data for ds_path, data in prepared_data if ds_path == dataset_paths[0]]
+    ecg_signals = np.array([ecg_signal for ecg_signal, _ in learing]).reshape(
+        (-1, num_ecgs, sample_length)
+    )
+    labels = np.array([label for _, label in learing]).reshape((-1, num_ecgs))
+
+    m, n, _ = ecg_signals.shape
+    out_arr = np.column_stack(
+        (np.repeat(np.arange(m), n), ecg_signals.reshape(m * n, -1))
+    )
+    out_df = pd.DataFrame(out_arr)
+    out_df.insert(sample_length + 1, sample_length + 1, labels.flatten())
+
+    out_df.to_csv("dataset.csv")
+
     return
 
 
