@@ -11,9 +11,8 @@ from numpy.typing import ArrayLike
 
 
 def parse_arguments(argv: List[str]) -> argparse.Namespace:
-    arg_parser = argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
-    )
+    """The code will parse arguments from std input."""
+    arg_parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     arg_parser.add_argument(
         "--ds-dir",
@@ -39,9 +38,7 @@ def parse_arguments(argv: List[str]) -> argparse.Namespace:
         help="Number of sampled points from a window",
     )
 
-    arg_parser.add_argument(
-        "--download", action="store_true", help="Whether to download database or not"
-    )
+    arg_parser.add_argument("--download", action="store_true", help="Whether to download database or not")
 
     return arg_parser.parse_args(argv)
 
@@ -72,9 +69,7 @@ def _list_records(dir: str) -> List[str]:
     return record_names
 
 
-def _read_record_and_annotation(
-    data_dir: str, record_name: str
-) -> Tuple[wfdb.Record, wfdb.Annotation]:
+def _read_record_and_annotation(data_dir: str, record_name: str) -> Tuple[wfdb.Record, wfdb.Annotation]:
     """Read record's data and annotation of a given record
 
     Args:
@@ -110,15 +105,15 @@ def _prepare_record_data(
     data_size = math.ceil(record_length / sample_length)
 
     ecg_data = np.zeros((data_size, sample_length, num_ecgs), dtype=np.float32)
-    labels = np.zeros((data_size, num_ecgs), dtype=np.int8)
+    labels = np.empty((data_size, num_ecgs), dtype=np.str)
 
     dummy_encoder = {"n": 0, "s": 1, "t": 2, "a": 3, "b": 4}
 
     for i in range(data_size):
         idx = i * sample_length
 
-        ecg_data[i] = record.p_signal[idx : idx + sample_length]
-        labels[i] = np.full((num_ecgs), dummy_encoder[label])
+        ecg_data[i] = record.p_signal[idx:idx + sample_length]
+        labels[i] = np.full((num_ecgs), label)
 
     ecg_data = ecg_data.swapaxes(1, 2)
 
@@ -126,7 +121,8 @@ def _prepare_record_data(
 
 
 def main() -> None:
-    # Parse arguments
+    """Main script code."""
+    # parse arguments
     args = parse_arguments(sys.argv[1:])
 
     ds_dir = args.ds_dir
@@ -150,34 +146,24 @@ def main() -> None:
 
     dataset_names = _list_all_data(ds_dir)
     dataset_paths = [os.path.join(ds_dir, dataset_dir) for dataset_dir in dataset_names]
+    dataset_paths = [dataset_path for dataset_path in dataset_paths if os.path.isdir(dataset_path)]
 
-    all_records = [
-        (dataset_dir, sorted(_list_records(dataset_dir)))
-        for dataset_dir in dataset_paths
-    ]
+    all_records = [(dataset_dir, sorted(_list_records(dataset_dir))) for dataset_dir in dataset_paths]
 
-    records_and_annotations = [
-        (dataset_dir, _read_record_and_annotation(dataset_dir, record_name))
-        for dataset_dir, record_names in all_records
-        for record_name in record_names
-    ]
+    records_and_annotations = [(dataset_dir, _read_record_and_annotation(dataset_dir, record_name))
+                               for dataset_dir, record_names in all_records
+                               for record_name in record_names]
 
-    prepared_data = [
-        (dataset_path, _prepare_record_data(rec, ann, label))
-        for dataset_path, (rec, ann, label) in records_and_annotations
-    ]
+    prepared_data = [(dataset_path, _prepare_record_data(rec, ann, label))
+                     for dataset_path, (rec, ann, label) in records_and_annotations]
 
     # Transform data
     learing = [data for ds_path, data in prepared_data if ds_path == dataset_paths[0]]
-    ecg_signals = np.array([ecg_signal for ecg_signal, _ in learing]).reshape(
-        (-1, num_ecgs, sample_length)
-    )
+    ecg_signals = np.array([ecg_signal for ecg_signal, _ in learing]).reshape((-1, num_ecgs, sample_length))
     labels = np.array([label for _, label in learing]).reshape((-1, num_ecgs))
 
     m, n, _ = ecg_signals.shape
-    out_arr = np.column_stack(
-        (np.repeat(np.arange(m), n), ecg_signals.reshape(m * n, -1))
-    )
+    out_arr = np.column_stack((np.repeat(np.arange(m), n), ecg_signals.reshape(m * n, -1)))
     out_df = pd.DataFrame(out_arr)
     out_df.insert(sample_length + 1, sample_length + 1, labels.flatten())
 
