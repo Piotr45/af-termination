@@ -131,3 +131,5 @@ dmypy.json
 dataset/
 dataset.csv
 ./poetry.lock
+
+train.ipynb
