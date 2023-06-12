@@ -1,6 +1,6 @@
 # Atrial fibrillation termination
 
-Predicting spontaneous termination of atrial fibrillation (AF) as an edge computing architecture.
+Predicting spontaneous termination of atrial fibrillation (AF) as an edge computing architecture. Network params can be found [here](/af-termination//neural-network/README.md)
 
 ## Getting Started
 
@@ -8,34 +8,43 @@ These instructions will get you a copy of the project up and running on your loc
 
 ### Prerequisites
 
-What things you need to install the software and how to install them
+What things you need to install the software and how to install them.
 
-```bash
-TODO
-```
+Hardware:
+
+- Arduino nano 33 BLE Sense Lite
+- ESP32-S3-DevKitM-1
+
+Software:
+
+- wfdb python package
+- tensorflow
+- [tflite for arduino](https://github.com/tensorflow/tflite-micro-arduino-examples)
+- poetry
 
 ### Installing
 
-```bash
-TODO
-```
-
-## Deployment
+Use poetry to install the virtual enviroment.
 
 ```bash
-TODO
+poetry install
+poetry shell
 ```
 
 ## Built With
 
-```bash
-TODO
-```
+To build software on hardware I used Arduino IDE.
 
 ## Authors
 
-* **Piotr Baryczkowski** - *Initial work* - [Piotr45](https://github.com/Piotr45)
+- **Piotr Baryczkowski** - *All the work* - [Piotr45](https://github.com/Piotr45)
 
 ## Acknowledgments
 
-* [AF Termination Challenge Database](https://physionet.org/content/aftdb/1.0.0/)
+- [AF Termination Challenge Database](https://physionet.org/content/aftdb/1.0.0/)
+
+## TODO
+
+- Update README
+- Rewrite train notebook to python file
+- Clean code
