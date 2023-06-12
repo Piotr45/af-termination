@@ -130,6 +130,8 @@ dmypy.json
 
 dataset/
 dataset.csv
+datasets/
+tmp_models/
 ./poetry.lock
 
-train.ipynb
+# train.ipynb
