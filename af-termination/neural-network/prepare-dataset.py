@@ -89,35 +89,50 @@ def _read_record_and_annotation(data_dir: str, record_name: str) -> Tuple[wfdb.R
     return (record, annotation, label)
 
 
-def _prepare_record_data(
-    record: wfdb.Record,
-    annotation: wfdb.Annotation,
-    label: str,
-    sample_length: int = 128,
-    sample_freq: int = 12,
-) -> Tuple[ArrayLike, ArrayLike]:
+def _prepare_record_data(record: wfdb.Record,
+                         annotation: wfdb.Annotation,
+                         label: str,
+                         sample_length: int = 128,
+                         sample_freq: int = 12,
+                         overlap: int = 96) -> Tuple[ArrayLike, ArrayLike]:
     """ """
     ann_points = annotation.sample
 
     record_length = record.p_signal.shape[0]
     num_ecgs = record.p_signal.shape[1]
 
-    data_size = math.ceil(record_length / sample_length)
+    data_size = math.ceil(record_length / (sample_length - overlap)) - 4
 
-    ecg_data = np.zeros((data_size, sample_length, num_ecgs), dtype=np.float32)
-    labels = np.empty((data_size, num_ecgs), dtype=np.str)
+    ecg_data = np.zeros((data_size, sample_freq, num_ecgs), dtype=np.float32)
+    labels = np.empty((data_size, num_ecgs), dtype=str)
 
     dummy_encoder = {"n": 0, "s": 1, "t": 2, "a": 3, "b": 4}
+    tmp_ecg = []
+    tmp_labels = []
 
     for i in range(data_size):
-        idx = i * sample_length
+        idx = i * (sample_length - overlap)
+        next_idx = idx + sample_length
 
-        ecg_data[i] = record.p_signal[idx:idx + sample_length]
-        labels[i] = np.full((num_ecgs), label)
+        if idx + sample_length > record_length:
+            break
 
+        for j in range(len(ann_points)):
+            if ann_points[j] < idx and ann_points[j + 1] > idx:
+                tmp_ecg.append(record.p_signal[idx:next_idx:math.ceil(sample_length / sample_freq)])
+                tmp_labels.append(label)
+                break
+
+        # ecg_data[i] = record.p_signal[idx:next_idx:math.ceil(sample_length / sample_freq)]
+        # labels[i] = np.full((num_ecgs), label)
+    tmp_ecg = np.array(tmp_ecg)
+    tmp_ecg.swapaxes(1, 2)
+    tmp_labels = np.array(tmp_labels)
     ecg_data = ecg_data.swapaxes(1, 2)
-
-    return (ecg_data, labels)
+    # print(np.array(tmp_ecg).shape, ecg_data.shape)
+    # print(tmp_ecg.shape, ecg_data.shape)
+    # return (ecg_data, labels)
+    return (tmp_ecg, tmp_labels)
 
 
 def main() -> None:
@@ -154,18 +169,29 @@ def main() -> None:
                                for dataset_dir, record_names in all_records
                                for record_name in record_names]
 
-    prepared_data = [(dataset_path, _prepare_record_data(rec, ann, label))
+    prepared_data = [(dataset_path,
+                      _prepare_record_data(rec, ann, label, sample_length=sample_length, sample_freq=sample_freq))
                      for dataset_path, (rec, ann, label) in records_and_annotations]
 
     # Transform data
     learing = [data for ds_path, data in prepared_data if ds_path == dataset_paths[0]]
-    ecg_signals = np.array([ecg_signal for ecg_signal, _ in learing]).reshape((-1, num_ecgs, sample_length))
-    labels = np.array([label for _, label in learing]).reshape((-1, num_ecgs))
+    ecg_signals = np.array(learing[0][0])
+    labels = np.array(learing[0][1])
 
-    m, n, _ = ecg_signals.shape
-    out_arr = np.column_stack((np.repeat(np.arange(m), n), ecg_signals.reshape(m * n, -1)))
-    out_df = pd.DataFrame(out_arr)
-    out_df.insert(sample_length + 1, sample_length + 1, labels.flatten())
+    for ecg_signal, label in learing[1:]:
+        ecg_signals = np.vstack((ecg_signals, ecg_signal))
+        labels = np.hstack((labels, label))
+
+    # print([ecg_signal.shape for ecg_signal, _ in learing])
+    # ecg_signals = np.array([ecg_signal for ecg_signal, _ in learing]).reshape((-1, num_ecgs, sample_freq))
+    # labels = np.array([label for _, label in learing]).reshape((-1, num_ecgs))
+
+    # m, n, _ = ecg_signals.shape
+    # out_arr = np.column_stack((np.repeat(np.arange(m), n), ecg_signals.reshape(m * n, -1)))
+    # print(out_arr.shape)
+    out_df = pd.DataFrame(ecg_signals[:, :, 0])
+    # out_df.insert(sample_freq + 1, sample_freq + 1, labels.flatten())
+    out_df.insert(sample_freq, sample_freq, labels)
 
     out_df.to_csv("dataset.csv")
 
