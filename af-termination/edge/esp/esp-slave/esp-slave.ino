@@ -44,12 +44,12 @@ void loop()
     
     if (receivedData.toInt() == 0) {
       lightRGB(0, 255, 0);
-      // Serial.println("dupa1");
     }
-    if (receivedData.toInt() == 1) {
+    else if (receivedData.toInt() == 1) {
       lightRGB(255, 0, 0);
-      // Serial.println("dupa2");
     }
-
+    else {
+      lightRGB(128, 128, 128);
+    }
   }
 }
